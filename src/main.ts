@@ -3,10 +3,10 @@ import { TypeormDatabase } from '@subsquid/typeorm-store'
 import * as itse from './abi/itse'
 import { Account, Token, Transfer } from './model'
 import { CONTRACT_ADDRESS, Context, processor } from './processor'
-import AWS from 'aws-sdk';
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { assertNotNull } from '@subsquid/util-internal'
 
-const s3 = new AWS.S3({
+const s3 = new S3Client({
     region: process.env.AWS_REGION,
     credentials: {
         accessKeyId: assertNotNull(process.env.AWS_ACCESS_KEY),
@@ -89,34 +89,23 @@ async function fetchToken(ctx: Context, tokenId: string) {
 
     const key = `${tokenId}.json`
     const bucketName = 'isdb';
-    const uploadParams = { Bucket: bucketName, Key: key }
-
+    const fileparams = { Bucket: bucketName, Key: key }
+    const command = new GetObjectCommand(fileparams)
     let name: string = '', description: string = ''
+    let metadata
     try {
 
-
-        await s3.getObject(uploadParams, function (err, data) {
-            if (err) {
-                console.log(err)
-                // throw err
-            }
-            if(data && data.Body){
-            console.log(data.Body, "found something")
-            const metadata = JSON.parse(assertNotNull(data.Body).toString())
+        const datax = await s3.send(command);
+        if (datax && datax.Body) {
+            metadata = JSON.parse(await datax.Body.transformToString())
             name = metadata.name
             description = metadata.description
-            }
-        });
+        }
     }
-    // catch (error) {
-    //     console.log("=====error=====\n", error)
-    // }
-
-    // let name = await contract.name()
-    // let description = await contract.name()
-    finally {
-        
+    catch (err) {
+        console.log(err);
     }
+    // console.log(name,description)
     return new Token({
         id: tokenId,
         name,
